@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRONFRONT — Tactical Warfare v4.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --hud-bg: rgba(8, 12, 18, 0.88);
+    --hud-border: rgba(0, 255, 136, 0.25);
+    --accent: #00ff88;
+    --accent-dim: #00aa55;
+    --danger: #ff3355;
+    --danger-dim: #aa2244;
+    --warning: #ffaa00;
+    --blue-team: #00aaff;
+    --red-team: #ff4444;
+    --text: #c8d8e8;
+    --text-bright: #eef4ff;
+    --panel-bg: rgba(10, 18, 28, 0.92);
+  }
+
+  body {
+    background: #060a10;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: crosshair;
+  }
+
+  #game-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+
+  .scanlines {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.012) 2px, rgba(0,255,136,0.012) 4px);
+  }
+
+  .top-hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    background: var(--hud-bg);
+    border-bottom: 1px solid var(--hud-border);
+    backdrop-filter: blur(12px);
+  }
+
+  .top-hud .game-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(0,255,136,0.5);
+  }
+
+  .turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+  }
+
+  .turn-indicator .turn-num { color: var(--accent); font-size: 16px; font-weight: 700; }
+
+  .turn-indicator .current-player {
+    padding: 4px 14px; border-radius: 3px; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase; font-size: 12px;
+  }
+  .turn-indicator .current-player.blue { background: rgba(0,170,255,0.2); border: 1px solid rgba(0,170,255,0.5); color: var(--blue-team); }
+  .turn-indicator .current-player.red { background: rgba(255,68,68,0.2); border: 1px solid rgba(255,68,68,0.5); color: var(--red-team); }
+
+  /* Weather Indicator */
+  .weather-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    padding: 4px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 3px;
+    letter-spacing: 1px;
+  }
+  .weather-indicator .weather-icon { font-size: 16px; }
+  .weather-indicator .weather-name { color: var(--text-bright); text-transform: uppercase; font-size: 10px; letter-spacing: 2px; }
+
+  .top-hud .scores { display: flex; gap: 20px; font-family: 'Share Tech Mono', monospace; }
+  .scores .team-score { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .scores .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .scores .dot.blue { background: var(--blue-team); box-shadow: 0 0 8px var(--blue-team); }
+  .scores .dot.red { background: var(--red-team); box-shadow: 0 0 8px var(--red-team); }
+
+  .hud-btn {
+    font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 600;
+    letter-spacing: 2px; padding: 6px 14px;
+    border: 1px solid var(--hud-border); background: rgba(0,255,136,0.06);
+    color: var(--accent); cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+  }
+  .hud-btn:hover { background: rgba(0,255,136,0.18); border-color: var(--accent); box-shadow: 0 0 12px rgba(0,255,136,0.2); }
+
+  .bottom-panel {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: stretch;
+    background: var(--hud-bg); border-top: 1px solid var(--hud-border);
+    backdrop-filter: blur(12px); min-height: 110px;
+  }
+
+  .unit-info { flex: 1; padding: 12px 20px; display: flex; align-items: center; gap: 16px; border-right: 1px solid rgba(0,255,136,0.1); }
+  .unit-info .unit-icon { width: 64px; height: 64px; border: 2px solid var(--hud-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: rgba(0,255,136,0.05); flex-shrink: 0; }
+  .unit-info .unit-details { flex: 1; }
+  .unit-info .unit-name { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; color: var(--text-bright); letter-spacing: 2px; margin-bottom: 4px; }
+  .unit-info .unit-type { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent-dim); letter-spacing: 1px; margin-bottom: 4px; }
+
+  /* Veterancy Rank Display */
+  .unit-rank {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--warning);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .unit-rank .rank-stars { font-size: 12px; }
+  .unit-rank .rank-name { text-transform: uppercase; font-weight: 600; }
+
+  .stat-bars { display: flex; flex-direction: column; gap: 4px; }
+  .stat-bar { display: flex; align-items: center; gap: 8px; font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+  .stat-bar .label { width: 30px; color: rgba(200,216,232,0.6); text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
+  .stat-bar .bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; max-width: 120px; }
+  .stat-bar .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  .stat-bar .bar-fill.hp { background: linear-gradient(90deg, var(--danger), var(--accent)); }
+  .stat-bar .bar-fill.atk { background: linear-gradient(90deg, var(--warning), #ff6600); }
+  .stat-bar .bar-fill.def { background: linear-gradient(90deg, #4488ff, var(--blue-team)); }
+  .stat-bar .value { width: 50px; text-align: right; color: var(--text-bright); font-size: 11px; }
+
+  .actions-panel { display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+
+  .action-btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 600;
+    letter-spacing: 2px; padding: 8px 16px;
+    border: 1px solid var(--hud-border); background: rgba(0,255,136,0.08);
+    color: var(--accent); cursor: pointer; transition: all 0.2s ease;
+    text-transform: uppercase; clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    min-width: 80px; text-align: center;
+  }
+  .action-btn:hover:not(:disabled) { background: rgba(0,255,136,0.2); border-color: var(--accent); box-shadow: 0 0 15px rgba(0,255,136,0.2); transform: translateY(-1px); }
+  .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .action-btn.attack { border-color: rgba(255,51,85,0.4); background: rgba(255,51,85,0.1); color: var(--danger); }
+  .action-btn.attack:hover:not(:disabled) { background: rgba(255,51,85,0.25); border-color: var(--danger); box-shadow: 0 0 15px rgba(255,51,85,0.3); }
+  .action-btn.end-turn { border-color: rgba(255,170,0,0.4); background: rgba(255,170,0,0.1); color: var(--warning); }
+  .action-btn.end-turn:hover:not(:disabled) { background: rgba(255,170,0,0.25); border-color: var(--warning); box-shadow: 0 0 15px rgba(255,170,0,0.3); }
+
+  /* Ability button - purple accent */
+  .action-btn.ability { border-color: rgba(180,100,255,0.4); background: rgba(180,100,255,0.1); color: #b464ff; }
+  .action-btn.ability:hover:not(:disabled) { background: rgba(180,100,255,0.25); border-color: #b464ff; box-shadow: 0 0 15px rgba(180,100,255,0.3); }
+
+  /* Merge button - cyan accent */
+  .action-btn.merge { border-color: rgba(0,220,220,0.4); background: rgba(0,220,220,0.1); color: #00dddd; }
+  .action-btn.merge:hover:not(:disabled) { background: rgba(0,220,220,0.25); border-color: #00dddd; box-shadow: 0 0 15px rgba(0,220,220,0.3); }
+
+  /* Stealth button - ghost/translucent */
+  .action-btn.stealth { border-color: rgba(200,200,255,0.2); background: rgba(200,200,255,0.04); color: rgba(200,200,255,0.6); }
+  .action-btn.stealth:hover:not(:disabled) { background: rgba(200,200,255,0.12); border-color: rgba(200,200,255,0.4); box-shadow: 0 0 15px rgba(200,200,255,0.15); }
+
+  .log-panel { width: 280px; padding: 8px 14px; border-left: 1px solid rgba(0,255,136,0.1); overflow-y: auto; max-height: 110px; font-family: 'Share Tech Mono', monospace; font-size: 10px; line-height: 1.6; }
+  .log-panel::-webkit-scrollbar { width: 3px; }
+  .log-panel::-webkit-scrollbar-track { background: transparent; }
+  .log-panel::-webkit-scrollbar-thumb { background: var(--hud-border); border-radius: 3px; }
+  .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); color: rgba(200,216,232,0.5); }
+  .log-entry.damage { color: var(--danger); }
+  .log-entry.heal { color: var(--accent); }
+  .log-entry.move { color: var(--blue-team); }
+  .log-entry.info { color: var(--warning); }
+  .log-entry.ai { color: #ff8844; }
+
+  .terrain-legend {
+    position: fixed; top: 50px; left: 10px; z-index: 10;
+    background: var(--panel-bg); border: 1px solid var(--hud-border);
+    border-radius: 4px; padding: 10px 14px;
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  }
+  .terrain-legend .legend-title { font-family: 'Orbitron', monospace; font-size: 9px; letter-spacing: 2px; color: var(--accent-dim); margin-bottom: 6px; }
+  .terrain-legend .legend-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .terrain-legend .legend-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.1); }
+
+  .side-panel { position: fixed; top: 50px; right: 10px; z-index: 10; width: 160px; }
+  .minimap { width: 160px; height: 160px; background: var(--panel-bg); border: 1px solid var(--hud-border); border-radius: 4px; overflow: hidden; }
+  .minimap canvas { width: 100%; height: 100%; }
+
+  .notification {
+    position: fixed; top: 55px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    z-index: 100; font-family: 'Orbitron', monospace; font-size: 24px; font-weight: 800;
+    letter-spacing: 6px; padding: 16px 40px;
+    background: var(--hud-bg); border: 1px solid var(--hud-border);
+    color: var(--accent); text-shadow: 0 0 30px rgba(0,255,136,0.6);
+    opacity: 0; transition: all 0.5s ease; pointer-events: none; text-transform: uppercase;
+  }
+  .notification.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Objective Banner */
+  .objective-banner {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 8px 32px 8px 16px;
+    background: var(--hud-bg);
+    border: 1px solid rgba(255,170,0,0.3);
+    color: var(--warning);
+    text-transform: uppercase;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+  }
+  .objective-banner.show { display: flex; }
+  .objective-banner .objective-text { opacity: 0.9; }
+  .objective-banner .objective-dismiss {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255,170,0,0.5);
+    cursor: pointer;
+    font-size: 14px;
+    font-family: 'Share Tech Mono', monospace;
+    padding: 2px 4px;
+    line-height: 1;
+  }
+  .objective-banner .objective-dismiss:hover { color: var(--warning); }
+
+  .game-over-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 200;
+    background: rgba(4,6,10,0.92); display: none; align-items: center; justify-content: center;
+    flex-direction: column; backdrop-filter: blur(8px);
+  }
+  .game-over-screen.show { display: flex; }
+  .game-over-screen h1 { font-family: 'Orbitron', monospace; font-size: 56px; font-weight: 900; letter-spacing: 12px; margin-bottom: 16px; }
+  .game-over-screen h1.victory { color: var(--accent); text-shadow: 0 0 60px rgba(0,255,136,0.6), 0 0 120px rgba(0,255,136,0.3); }
+  .game-over-screen h1.defeat { color: var(--danger); text-shadow: 0 0 60px rgba(255,51,85,0.6), 0 0 120px rgba(255,51,85,0.3); }
+  .game-over-screen .subtitle { font-family: 'Share Tech Mono', monospace; font-size: 16px; color: var(--text); letter-spacing: 4px; margin-bottom: 40px; }
+  .game-over-screen .restart-btn { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; letter-spacing: 4px; padding: 14px 40px; border: 2px solid var(--accent); background: rgba(0,255,136,0.1); color: var(--accent); cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; }
+  .game-over-screen .restart-btn:hover { background: rgba(0,255,136,0.25); box-shadow: 0 0 30px rgba(0,255,136,0.3); transform: scale(1.05); }
+
+  .tile-tooltip { position: fixed; z-index: 50; background: var(--panel-bg); border: 1px solid var(--hud-border); border-radius: 4px; padding: 8px 12px; font-family: 'Share Tech Mono', monospace; font-size: 11px; pointer-events: none; display: none; min-width: 120px; }
+  .tile-tooltip.show { display: block; }
+
+  .loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 500; background: #060a10; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
+  .loading-screen.hidden { opacity: 0; pointer-events: none; display: none; }
+  .loading-screen h1 { font-family: 'Orbitron', monospace; font-size: 42px; font-weight: 900; letter-spacing: 12px; color: var(--accent); text-shadow: 0 0 40px rgba(0,255,136,0.5); margin-bottom: 8px; }
+  .loading-screen .tagline { font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 6px; color: var(--text); margin-bottom: 40px; }
+  .loading-bar-container { width: 300px; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+  .loading-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); border-radius: 2px; transition: width 0.3s ease; box-shadow: 0 0 10px rgba(0,255,136,0.5); }
+  .loading-text { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 3px; color: var(--accent-dim); margin-top: 12px; }
+
+  .controls-help { position: fixed; bottom: 125px; left: 10px; z-index: 10; background: var(--panel-bg); border: 1px solid var(--hud-border); border-radius: 4px; padding: 8px 12px; font-family: 'Share Tech Mono', monospace; font-size: 9px; color: rgba(200,216,232,0.4); line-height: 1.7; }
+  .controls-help span { color: var(--accent-dim); }
+
+  /* ========== MAIN MENU ========== */
+  .main-menu {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 600;
+    background: #060a10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+  }
+  .main-menu::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.008) 2px, rgba(0,255,136,0.008) 4px);
+    pointer-events: none;
+  }
+  .main-menu .menu-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 64px;
+    font-weight: 900;
+    letter-spacing: 16px;
+    color: var(--accent);
+    text-shadow: 0 0 60px rgba(0,255,136,0.5), 0 0 120px rgba(0,255,136,0.2);
+    margin-bottom: 4px;
+    position: relative;
+  }
+  .main-menu .menu-subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 8px;
+    color: var(--accent-dim);
+    margin-bottom: 48px;
+  }
+  .main-menu .menu-section-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    color: rgba(200,216,232,0.3);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  /* Game mode buttons */
+  .mode-buttons { display: flex; flex-direction: column; gap: 10px; margin-bottom: 36px; width: 380px; }
+  .mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 20px;
+    border: 1px solid var(--hud-border);
+    background: rgba(0,255,136,0.04);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  }
+  .mode-btn .mode-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+  .mode-btn .mode-desc {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(200,216,232,0.5);
+  }
+  .mode-btn:hover { background: rgba(0,255,136,0.12); border-color: var(--accent); }
+  .mode-btn.selected { background: rgba(0,255,136,0.15); border-color: var(--accent); box-shadow: 0 0 20px rgba(0,255,136,0.15); }
+  .mode-btn.selected .mode-name { text-shadow: 0 0 10px rgba(0,255,136,0.5); }
+
+  /* Fog of War mode - blue accent */
+  .mode-btn.fog .mode-name { color: var(--blue-team); }
+  .mode-btn.fog { border-color: rgba(0,170,255,0.25); background: rgba(0,170,255,0.04); }
+  .mode-btn.fog:hover { background: rgba(0,170,255,0.12); border-color: var(--blue-team); }
+  .mode-btn.fog.selected { background: rgba(0,170,255,0.15); border-color: var(--blue-team); box-shadow: 0 0 20px rgba(0,170,255,0.15); }
+  .mode-btn.fog.selected .mode-name { text-shadow: 0 0 10px rgba(0,170,255,0.5); }
+
+  /* Total Warfare mode - red/orange accent */
+  .mode-btn.total .mode-name { color: #ff6633; }
+  .mode-btn.total { border-color: rgba(255,102,51,0.25); background: rgba(255,102,51,0.04); }
+  .mode-btn.total:hover { background: rgba(255,102,51,0.12); border-color: #ff6633; }
+  .mode-btn.total.selected { background: rgba(255,102,51,0.15); border-color: #ff6633; box-shadow: 0 0 20px rgba(255,102,51,0.15); }
+  .mode-btn.total.selected .mode-name { text-shadow: 0 0 10px rgba(255,102,51,0.5); }
+
+  /* Settings area */
+  .menu-settings { display: flex; gap: 32px; margin-bottom: 40px; align-items: flex-start; }
+  .setting-group { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .setting-group .setting-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: rgba(200,216,232,0.4);
+    text-transform: uppercase;
+  }
+  .toggle-group { display: flex; gap: 4px; }
+  .toggle-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+    color: rgba(200,216,232,0.4);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+  }
+  .toggle-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
+  .toggle-btn.active {
+    background: rgba(0,255,136,0.12);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 8px rgba(0,255,136,0.15);
+  }
+
+  /* Deploy button */
+  .deploy-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    padding: 16px 60px;
+    border: 2px solid var(--accent);
+    background: rgba(0,255,136,0.08);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+    text-shadow: 0 0 20px rgba(0,255,136,0.4);
+  }
+  .deploy-btn:hover {
+    background: rgba(0,255,136,0.2);
+    box-shadow: 0 0 40px rgba(0,255,136,0.3), inset 0 0 30px rgba(0,255,136,0.05);
+    transform: scale(1.04);
+  }
+
+  .main-menu.hidden { display: none; }
+
+  @keyframes flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.97; } 52% { opacity: 0.9; } 54% { opacity: 1; } }
+  .top-hud, .bottom-panel { animation: flicker 4s infinite; }
+</style>
+</head>
+<body>
+
+<!-- ===== MAIN MENU (z-index: 600, shown first) ===== -->
+<div class="main-menu" id="mainMenu">
+  <div class="menu-title">IRONFRONT</div>
+  <div class="menu-subtitle">TACTICAL WARFARE SYSTEM v4.0</div>
+
+  <div class="menu-section-label">SELECT GAME MODE</div>
+  <div class="mode-buttons">
+    <div class="mode-btn selected" data-mode="classic" onclick="menuSelectMode(this)">
+      <div class="mode-name">CLASSIC WARFARE</div>
+      <div class="mode-desc">Standard tactical combat with balanced forces</div>
+    </div>
+    <div class="mode-btn fog" data-mode="fog" onclick="menuSelectMode(this)">
+      <div class="mode-name">FOG OF WAR</div>
+      <div class="mode-desc">Limited visibility -- reconnaissance is key</div>
+    </div>
+    <div class="mode-btn total" data-mode="total" onclick="menuSelectMode(this)">
+      <div class="mode-name">TOTAL WARFARE</div>
+      <div class="mode-desc">All systems active -- weather, veterancy, abilities</div>
+    </div>
+  </div>
+
+  <div class="menu-settings">
+    <div class="setting-group">
+      <div class="setting-label">DIFFICULTY</div>
+      <div class="toggle-group">
+        <button class="toggle-btn" data-difficulty="easy" onclick="menuSelectDifficulty(this)">EASY</button>
+        <button class="toggle-btn active" data-difficulty="normal" onclick="menuSelectDifficulty(this)">NORMAL</button>
+        <button class="toggle-btn" data-difficulty="hard" onclick="menuSelectDifficulty(this)">HARD</button>
+      </div>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label">MULTIPLAYER</div>
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-mp="ai" onclick="menuSelectMultiplayer(this)">VS AI</button>
+        <button class="toggle-btn" data-mp="hotseat" onclick="menuSelectMultiplayer(this)">HOT SEAT</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="deploy-btn" onclick="menuDeploy()">DEPLOY</button>
+</div>
+
+<!-- ===== LOADING SCREEN ===== -->
+<div class="loading-screen" id="loadingScreen" style="display:none;">
+  <h1>IRONFRONT</h1>
+  <div class="tagline">TACTICAL WARFARE SYSTEM v4.0</div>
+  <div class="loading-bar-container"><div class="loading-bar" id="loadingBar"></div></div>
+  <div class="loading-text" id="loadingText">INITIALIZING...</div>
+</div>
+
+<canvas id="game-canvas"></canvas>
+<div class="scanlines"></div>
+
+<div class="top-hud">
+  <div class="game-title">IRONFRONT</div>
+  <div class="turn-indicator">
+    <span class="turn-num" id="turnNum">TURN 1</span>
+    <span class="current-player blue" id="currentPlayer">YOUR TURN</span>
+  </div>
+  <div class="weather-indicator" id="weatherIndicator">
+    <span class="weather-icon">&#9728;&#65039;</span>
+    <span class="weather-name">Clear Skies</span>
+  </div>
+  <div class="scores">
+    <div class="team-score"><span class="dot blue"></span> <span id="blueCount">9</span> UNITS</div>
+    <div class="team-score"><span class="dot red"></span> <span id="redCount">9</span> UNITS</div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="hud-btn" onclick="IRON.openResearchPanel && IRON.openResearchPanel()">RESEARCH [R]</button>
+    <button class="hud-btn" onclick="IRON.openProductionPanel && IRON.openProductionPanel()">PRODUCE [P]</button>
+  </div>
+</div>
+
+<div class="terrain-legend">
+  <div class="legend-title">TERRAIN</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#4a7a3a"></div> Plains</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#2a5a2a"></div> Forest +2 DEF</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#6a6a5a"></div> Mountain +3 DEF</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#2a5a7a"></div> Water BLOCK</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#8a7a5a"></div> Road +MOV</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#9a8a6a"></div> Bridge</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#4a6a4a"></div> HQ +3 DEF</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#6a6a3a"></div> Supply Depot</div>
+</div>
+
+<div class="side-panel">
+  <div class="minimap"><canvas id="minimapCanvas" width="160" height="160"></canvas></div>
+</div>
+
+<div class="controls-help">
+  <span>WASD</span> Pan Camera<br>
+  <span>Q/E</span> Rotate<br>
+  <span>SCROLL</span> Zoom<br>
+  <span>RMB</span> Drag Rotate<br>
+  <span>R</span> Research Tree<br>
+  <span>P</span> Production<br>
+  <span>F</span> Ability<br>
+  <span>M</span> Merge<br>
+  <span>SPACE</span> End Turn<br>
+  <span>ESC</span> Deselect
+</div>
+
+<div class="bottom-panel">
+  <div class="unit-info">
+    <div class="unit-icon" id="unitIcon">&#x2B21;</div>
+    <div class="unit-details">
+      <div class="unit-name" id="unitName">SELECT A UNIT</div>
+      <div class="unit-type" id="unitType">CLICK ON YOUR UNITS</div>
+      <div class="unit-rank" id="unitRank" style="display:none;">
+        <span class="rank-stars"></span>
+        <span class="rank-name"></span>
+      </div>
+      <div class="stat-bars" id="statBars"></div>
+    </div>
+  </div>
+  <div class="actions-panel" id="actionsPanel">
+    <button class="action-btn" id="btnMove" disabled>MOVE</button>
+    <button class="action-btn attack" id="btnAttack" disabled>ATTACK</button>
+    <button class="action-btn ability" id="btnAbility" disabled style="display:none;">ABILITY</button>
+    <button class="action-btn merge" id="btnMerge" disabled style="display:none;">MERGE</button>
+    <button class="action-btn stealth" id="btnStealth" disabled style="display:none;">STEALTH</button>
+    <button class="action-btn" id="btnWait" disabled>WAIT</button>
+    <button class="action-btn end-turn" id="btnEndTurn">END TURN</button>
+  </div>
+  <div class="log-panel" id="logPanel">
+    <div class="log-entry info">[ IRONFRONT v4.0 ]</div>
+    <div class="log-entry">Awaiting orders, Commander.</div>
+  </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<!-- Objective Banner -->
+<div class="objective-banner" id="objectiveBanner">
+  <span class="objective-text"></span>
+  <button class="objective-dismiss" onclick="document.getElementById('objectiveBanner').classList.remove('show');">&times;</button>
+</div>
+
+<div class="game-over-screen" id="gameOverScreen">
+  <h1 id="gameOverTitle">VICTORY</h1>
+  <div class="subtitle" id="gameOverSubtitle">ALL ENEMY FORCES ELIMINATED</div>
+  <button class="restart-btn" onclick="location.reload()">NEW BATTLE</button>
+</div>
+
+<div class="tile-tooltip" id="tileTooltip"></div>
+
+<!-- Main Menu Logic -->
+<script>
+  var IRON = window.IRON || {};
+  IRON.SETTINGS = {
+    gameMode: 'CLASSIC',
+    difficulty: 'normal',
+    multiplayer: false
+  };
+
+  function menuSelectMode(el) {
+    document.querySelectorAll('.mode-btn').forEach(function(b) { b.classList.remove('selected'); });
+    el.classList.add('selected');
+    var modeMap = { classic: 'CLASSIC', fog: 'FOG', total: 'WARFARE' };
+    IRON.SETTINGS.gameMode = modeMap[el.getAttribute('data-mode')] || 'CLASSIC';
+  }
+
+  function menuSelectDifficulty(el) {
+    el.parentElement.querySelectorAll('.toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+    el.classList.add('active');
+    IRON.SETTINGS.difficulty = el.getAttribute('data-difficulty');
+  }
+
+  function menuSelectMultiplayer(el) {
+    el.parentElement.querySelectorAll('.toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+    el.classList.add('active');
+    IRON.SETTINGS.multiplayer = (el.getAttribute('data-mp') === 'hotseat');
+  }
+
+  function menuDeploy() {
+    console.log('[MENU] Deploy clicked. IRON.startGame:', typeof IRON.startGame);
+    document.getElementById('mainMenu').classList.add('hidden');
+    var ls = document.getElementById('loadingScreen');
+    ls.style.display = 'flex';
+    if (typeof IRON.startGame === 'function') {
+      IRON.startGame();
+    } else {
+      console.error('[MENU] IRON.startGame not defined! Scripts may have failed to load.');
+      document.getElementById('loadingText').textContent = 'ERROR: Game failed to load. Check console (F12).';
+    }
+  }
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
